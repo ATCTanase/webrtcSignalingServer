@@ -1,16 +1,10 @@
-// server.js
+// Node.js + ws ‚Ì—á
 const WebSocket = require('ws');
+const server = new WebSocket.Server({ port: 8080, path: '/ws' });
 
-const PORT = process.env.PORT || 443;
-
-const wss = new WebSocket.Server({ port: PORT });
-
-wss.on('connection', (ws) => {
+server.on('connection', socket => {
   console.log('Client connected');
-  ws.on('message', (message) => {
-    console.log(`Received: ${message}`);
-    ws.send(`Echo: ${message}`);
+  socket.on('message', message => {
+    console.log('Received: ', message);
   });
 });
-
-console.log(`WebSocket server running on port ${PORT}`);
