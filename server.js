@@ -1,4 +1,4 @@
-const WebSocket = require('ws');
+const WebSocket = require('wss');
 
 const wss = new WebSocket.Server({ port: 8080 }); // ポートは必要に応じて変更可能
 
