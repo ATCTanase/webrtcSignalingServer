@@ -105,6 +105,11 @@ wss.on('connection', socket => {
       console.log('Android socket closed');
       androidSocket = null;
     }
+        wss.clients.forEach(client => {
+        if (client !== socket && client.readyState === WebSocket.OPEN) {
+            client.send(JSON.stringify({ type: "peer-disconnected" }));
+        }
+    });
   });
 });
 
