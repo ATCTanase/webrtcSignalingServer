@@ -11,34 +11,79 @@ const server = http.createServer((req, res) => {
 
 const wss = new WebSocket.Server({ server, path: '/ws' });
 
+let browserSocket = null;
+let androidSocket = null;
+let latestOffer = null;
 wss.on('connection', socket => {
-  console.log('Client connected');
+  console.log('🟢 Client connected');
 
-// シグナリングサーバーのコード
-socket.on('message', message => {
-  // 受信したメッセージの型を確認
-  console.log(`Received message type: ${typeof message}`);
-  console.log("Received message content:", message);
+  socket.on('message', rawMsg => {
+    let msgText = Buffer.isBuffer(rawMsg) ? rawMsg.toString('utf8') : rawMsg;
+    console.log("📨 Received:", msgText);
 
-  let msgToSend = message; // デフォルトは受信したまま
+    let msg;
+    try {
+      msg = JSON.parse(msgText);
+    } catch (e) {
+      console.error("❌ Failed to parse message:", e);
+      return;
+    }
 
-  // もしメッセージがBuffer型なら、文字列に変換
-  if (Buffer.isBuffer(message)) {
-    msgToSend = message.toString('utf8');
-    console.log("Converted Buffer message to string for sending:", msgToSend);
-  }
 
-  // 接続している他のクライアントにメッセージをブロードキャスト
-  wss.clients.forEach(client => {
-    if (client !== socket && client.readyState === WebSocket.OPEN) {
-      console.log("Sending message to client:", msgToSend); // 送信前にログを追加
-      client.send(msgToSend); // 変換後のメッセージを送信
+      // ---- ブラウザからのOffer ----
+      case 'offer':
+        latestOffer = msg.sdp;
+        console.log('💾 Offer stored');
+        if (androidSocket && androidSocket.readyState === WebSocket.OPEN) {
+          console.log('📤 Forwarding offer to Android');
+          androidSocket.send(JSON.stringify(msg));
+        }
+        break;
+
+      // ---- AndroidからのAnswer ----
+      case 'answer':
+        if (browserSocket && browserSocket.readyState === WebSocket.OPEN) {
+          console.log('📤 Forwarding answer to Browser');
+          browserSocket.send(JSON.stringify(msg));
+        }
+        break;
+
+      // ---- Candidate ----
+      case 'candidate':
+        if (socket === browserSocket && androidSocket?.readyState === WebSocket.OPEN) {
+          androidSocket.send(JSON.stringify(msg));
+        } else if (socket === androidSocket && browserSocket?.readyState === WebSocket.OPEN) {
+          browserSocket.send(JSON.stringify(msg));
+        }
+        break;
+
+      // ---- 明示的切断 ----
+      case 'disconnect':
+        if (msg.role === 'browser') {
+          console.log('🚫 Browser manually disconnected. Clearing offer.');
+          latestOffer = null;
+          browserSocket = null;
+        } else if (msg.role === 'android') {
+          console.log('🚫 Android manually disconnected.');
+          androidSocket = null;
+        }
+        break;
+
+      default:
+        console.warn('⚠️ Unknown message type:', msg.type);
     }
   });
-});
 
   socket.on('close', () => {
-    console.log('Client disconnected');
+    console.log('🔴 Client disconnected');
+    if (socket === browserSocket) {
+      console.log('Browser socket closed — clearing offer');
+      browserSocket = null;
+      latestOffer = null;
+    } else if (socket === androidSocket) {
+      console.log('Android socket closed');
+      androidSocket = null;
+    }
   });
 });
 
