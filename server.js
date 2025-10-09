@@ -14,15 +14,28 @@ const wss = new WebSocket.Server({ server, path: '/ws' });
 wss.on('connection', socket => {
   console.log('Client connected');
 
-  socket.on('message', message => {
-    console.log('Received:', message);
-    // 受け取ったメッセージを全クライアントにブロードキャスト
-    wss.clients.forEach(client => {
-      if (client !== socket && client.readyState === WebSocket.OPEN) {
-        client.send(message);
-      }
-    });
+// シグナリングサーバーのコード
+socket.on('message', message => {
+  // 受信したメッセージの型を確認
+  console.log(`Received message type: ${typeof message}`);
+  console.log("Received message content:", message);
+
+  let msgToSend = message; // デフォルトは受信したまま
+
+  // もしメッセージがBuffer型なら、文字列に変換
+  if (Buffer.isBuffer(message)) {
+    msgToSend = message.toString('utf8');
+    console.log("Converted Buffer message to string for sending:", msgToSend);
+  }
+
+  // 接続している他のクライアントにメッセージをブロードキャスト
+  wss.clients.forEach(client => {
+    if (client !== socket && client.readyState === WebSocket.OPEN) {
+      console.log("Sending message to client:", msgToSend); // 送信前にログを追加
+      client.send(msgToSend); // 変換後のメッセージを送信
+    }
   });
+});
 
   socket.on('close', () => {
     console.log('Client disconnected');
