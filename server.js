@@ -6,14 +6,16 @@ const PORT = process.env.PORT || 3000;
 
 const server = http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' });
-  res.end('WebRTC signaling server is running\n');
+  res.end('✅ WebRTC signaling server is running\n');
 });
 
 const wss = new WebSocket.Server({ server, path: '/ws' });
 
+// --- 接続状態を保持 ---
 let browserSocket = null;
 let androidSocket = null;
-let latestOffer = null;
+let latestOffer = null; // ブラウザのOfferを一時保持
+
 wss.on('connection', socket => {
   console.log('🟢 Client connected');
 
@@ -29,6 +31,25 @@ wss.on('connection', socket => {
       return;
     }
 
+    switch (msg.type) {
+      // ---- ブラウザ登録 ----
+      case 'register':
+        if (msg.role === 'browser') {
+          browserSocket = socket;
+          console.log('🌐 Browser registered');
+          // もし古いOfferが残っていればクリア
+          latestOffer = null;
+        } else if (msg.role === 'android') {
+          androidSocket = socket;
+          console.log('🤖 Android registered');
+
+          // Androidが後から来た場合、最新のOfferを送る
+          if (latestOffer && androidSocket.readyState === WebSocket.OPEN) {
+            console.log('📤 Sending stored offer to Android');
+            androidSocket.send(JSON.stringify({ type: 'offer', sdp: latestOffer }));
+          }
+        }
+        break;
 
       // ---- ブラウザからのOffer ----
       case 'offer':
